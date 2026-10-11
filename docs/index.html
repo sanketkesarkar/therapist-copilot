@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Therapist Copilot: real-time session transcription with per-segment crisis risk scoring. FastAPI, WebSockets, Deepgram, Whisper and Gemini.">
+<meta property="og:title" content="Therapist Copilot | Listens live. Flags risk as it surfaces.">
+<meta property="og:description" content="Session audio in over WebSockets, transcripts and risk alerts out. Replay four sample sessions in your browser.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;650&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>Therapist Copilot | Listens live. Flags risk as it surfaces.</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <a class="brand" href="#"><span class="icon" aria-hidden="true"><i></i><i></i><i></i></span> Therapist Copilot</a>
+  <nav aria-label="Main navigation">
+    <a href="#demo">Demo</a>
+    <a href="#architecture">Architecture</a>
+    <a href="https://github.com/sanketkesarkar/therapist-copilot">GitHub ↗</a>
+  </nav>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wave" aria-hidden="true"></div>
+  <div class="eyebrow">REAL-TIME TRANSCRIPTION · CRISIS RISK SCORING</div>
+  <h1>Listens to the session.<br><span>Flags risk as it surfaces.</span></h1>
+  <p class="intro">A FastAPI service that streams session audio to Deepgram or Whisper, scores every transcript segment for crisis risk, and alerts the therapist over the same WebSocket.</p>
+  <div class="actions">
+    <a class="button" href="#demo">Replay a sample session ↓</a>
+    <a class="button secondary" href="https://github.com/sanketkesarkar/therapist-copilot">View source ↗</a>
+  </div>
+  <div class="tags"><span>FastAPI + WebSockets</span><span>Deepgram nova-2</span><span>Whisper</span><span>Gemini + LangChain</span><span>Docker</span></div>
+  <div class="hero-note">Built by Sanket Kesarkar</div>
+</section>
+
+<section id="demo">
+  <div class="eyebrow">01 / SEE IT IN CONTEXT</div>
+  <h2>A session. A score. The alert behind it.</h2>
+  <p class="description">Pick a sample session and watch transcript segments arrive, get scored, and trigger the events a therapist's client would receive.</p>
+  <div class="sample-note"><strong>Sample replay</strong> · Fictional transcripts played in your browser. Scores were computed by the project's keyword fallback, the mode it runs in without a Gemini key. No audio is recorded and no API is called.</div>
+
+  <div class="scenarios" role="group" aria-label="Choose a sample session">
+    <button data-scenario="routine" aria-pressed="true"><b>Routine check-in</b><small>Stays low</small></button>
+    <button data-scenario="distress" aria-pressed="false"><b>Rising distress</b><small>Triggers a warning</small></button>
+    <button data-scenario="crisis" aria-pressed="false"><b>Crisis language</b><small>Locks the session</small></button>
+    <button data-scenario="missed" aria-pressed="false"><b>What keywords miss</b><small>Shows the gap</small></button>
+  </div>
+
+  <div class="console">
+    <div class="panel transcript-panel">
+      <div class="panel-head">
+        <span class="live"><span class="dot" id="live-dot"></span><span id="live-label">LIVE TRANSCRIPT</span></span>
+        <span class="meta" id="session-meta">WS /api/v1/ws/audio/3f2a…c91e</span>
+      </div>
+      <div class="mini-wave" id="mini-wave" aria-hidden="true"></div>
+      <ol class="transcript" id="transcript" aria-live="polite"></ol>
+      <div class="panel-foot">
+        <span>Deepgram nova-2 · 16 kHz PCM · diarized</span>
+        <button class="replay" id="replay">↻ Replay</button>
+      </div>
+    </div>
+
+    <div class="panel risk-panel">
+      <div class="panel-head">RISK ASSESSMENT <span class="pill">Keyword fallback</span></div>
+      <div class="gauge-wrap">
+        <svg class="gauge" viewBox="0 0 220 128" role="img" aria-labelledby="gauge-title">
+          <title id="gauge-title">Current risk score</title>
+          <path class="g-track" d="M20 110 A90 90 0 0 1 200 110" pathLength="100"/>
+          <path class="g-fill" id="g-fill" d="M20 110 A90 90 0 0 1 200 110" pathLength="100"/>
+          <line class="g-thresh" x1="110" y1="14" x2="110" y2="34"/>
+          <text class="g-thresh-label" x="110" y="10">0.5 alert</text>
+        </svg>
+        <div class="gauge-read">
+          <div class="score" id="score">0.00</div>
+          <div class="level" id="level">Waiting</div>
+        </div>
+      </div>
+      <div class="timeline-head"><span>Score per segment</span><span>peak <b id="peak">0.00</b></span></div>
+      <div class="timeline" id="timeline"><span class="thresh-line"></span></div>
+      <div class="log-head">WebSocket events</div>
+      <ol class="log" id="log"></ol>
+    </div>
+  </div>
+
+  <div class="outcome" id="outcome" aria-live="polite">
+    <div class="outcome-label" id="outcome-label">OUTCOME</div>
+    <h3 id="outcome-title"></h3>
+    <p id="outcome-body"></p>
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="eyebrow">02 / UNDER THE HOOD</div>
+  <h2>From spoken word to alert.</h2>
+  <div class="architecture">
+    <article><span>01</span><h3>Stream</h3><p>The client sends 16 kHz PCM audio over a WebSocket in one-second chunks. A rolling buffer keeps the last 30 seconds in memory.</p></article>
+    <article><span>02</span><h3>Transcribe</h3><p>Deepgram nova-2 returns interim and final segments live, with diarization. Local Whisper is the offline alternative behind one adapter.</p></article>
+    <article><span>03</span><h3>Assess</h3><p>Each final segment goes to Gemini at temperature 0.1 for a JSON risk score. Keyword matching takes over when Gemini is unavailable.</p></article>
+    <article><span>04</span><h3>Alert</h3><p>Medium scores send a risk_warning. Scores at or above the 0.5 threshold send crisis_detected and lock the session.</p></article>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">03 / ENGINEERING NOTES</div>
+  <h2>The details that changed the design.</h2>
+  <div class="lessons">
+    <article><h3>Segments are scored alone.</h3><p>Each segment is assessed without the ones before it. In fallback mode a single explicit mention scores 0.40, so context across turns is the next change.</p></article>
+    <article><h3>Fallbacks should say so.</h3><p>When Gemini fails or returns unparseable JSON, keyword matching answers instead, and the response looks the same. Results need to state which path produced them.</p></article>
+    <article><h3>A lock can silence the transcript.</h3><p>Locking on crisis closes the stream, ending transcription when the therapist most needs it. Alerting without stopping capture is the safer design.</p></article>
+  </div>
+  <div class="status">
+    <div><strong>Two speech providers</strong><p>Deepgram live streaming or local Whisper, switched by one setting.</p></div>
+    <div><strong>Scores reproduced</strong><p>Every demo score was computed with the project's fallback scorer.</p></div>
+    <div><strong>Docker Compose ready</strong><p>API container with a health check. Gemini mode is not shown here.</p></div>
+  </div>
+  <p class="fine-print">Current limitations: Therapist Copilot is a portfolio project, not a clinical tool, and its scores are not validated. There are no automated tests yet, token authentication is configured but not enforced, and the Gemini and fallback paths use slightly different score bands. All transcripts on this page are fictional.</p>
+</section>
+
+<section class="closing">
+  <div class="eyebrow">EXPLORE THE PROJECT</div>
+  <h2>The alert is not the decision.</h2>
+  <p>The goal is a second set of ears that hands the moment back to the therapist.</p>
+  <a class="button" href="https://github.com/sanketkesarkar/therapist-copilot">Explore Therapist Copilot on GitHub ↗</a>
+</section>
+</main>
+
+<footer>
+  <span>Therapist Copilot · Sanket Kesarkar</span>
+  <span class="help">If you or someone you know is struggling, call or text 988 in the US.</span>
+  <a href="https://github.com/sanketkesarkar/therapist-copilot">Source code ↗</a>
+</footer>
+<script src="demo.js"></script>
+</body>
+</html>
